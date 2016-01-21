@@ -1,0 +1,64 @@
+
+# Programming #
+###############
+/app/cache/*
+!/app/cache/.gitkeep
+/app/data/*
+!/app/data/.gitkeep
+/app/logs/*
+!/app/logs/.gitkeep
+/app/config/parameters.php
+/vendor/
+/web/vendor/
+/composer.phar
+
+# Packages #
+############
+*.7z
+*.dmg
+*.gz
+*.iso
+*.jar
+*.rar
+*.tar
+*.zip
+
+# Logs and databases #
+######################
+*.log
+*.sql
+
+# OS generated files #
+######################
+.DS_Store*
+ehthumbs.db
+Icon
+
+Thumbs.db
+._*
+
+# IntelliJIDEA phpStorm #
+#########################
+.idea
+
+# Eclipse files #
+#################
+.buildpath
+.project
+.settings/*
+dummy.php
+
+# Emacs files #
+###############
+*~
+\#*#
+\.\#
+
+# Vim generated files #
+######################
+*.un~
+
+# SASS #
+##########
+.sass-cache
+

@@ -1,0 +1,18 @@
+{
+  "name": "dvm",
+  "description": "Drupal VM Utility",
+  "type": "project",
+  "license": "MIT",
+  "authors": [
+    {
+      "name":      "Brian Wood",
+      "email":     "bwood@berkeley.edu"
+    }
+  ],
+  "require": {
+    "symfony/yaml": "3.0.1"
+  },
+  "autoload": {
+    "psr-4": {"Dvm\\": "src"}
+  }
+}
