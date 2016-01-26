@@ -96,13 +96,12 @@ else {
   print "Using git to pull the latest code into $site_dir...\n";
   $cmd = "cd $site_dir;git pull";
   //TODO: enable
-  /***********
-  * exec($cmd, $output, $return);
-  * if ($return != 0) {
-    * print "Error: Could not run '$cmd'\n";
-    * print implode("\n", $output);
-   * }
-   *********/
+  exec($cmd, $output, $return);
+  if ($return != 0) {
+    print "Error: Could not run '$cmd'\n";
+    print implode("\n", $output);
+  }
+
 }
 
 //TODO: test that these won't be added multiple times
@@ -266,11 +265,19 @@ if ($path !== FALSE) {
   print "Loading database...\n";
   $cmd = "mysql -uroot -proot -P33060 -h127.0.0.1 $site_name < $db_dump";
   print "$cmd\n";
+  //TODO: enable
+  /*
   exec($cmd, $output, $return);
   if ($return != 0) {
     print "Error: Couldn't load db.\n";
     exit(1);
   }
+  // clean up
+  if (!unlink($path)) {
+    print "Warning: Couldn't clean up $path\n";
+  }
+  unlink($db_dump);
+  */
 
 }
 
@@ -292,6 +299,9 @@ if ($path !== FALSE) {
     print implode("/n", $output);
     exit(1);
   }
+  //TODO: improve. php builtins?
+  exec("rm -rf $sites_default/files_live");
+  exec("rm -rf $sites_default/files");
   exec("cd $sites_default ;tar zxf $path;mv files_live files", $output, $return);
   if ($return != 0) {
     print "Error: Couldn't untar files.\n";
