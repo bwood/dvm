@@ -5,10 +5,20 @@ require __DIR__ . '/terminus.inc';
 use Symfony\Component\Yaml\Yaml;
 
 
-// Ensure git installed
-exec('which git', $output, $return);
-if ($return != 0) {
-  print "Error: Can't find git. Please install it or fix your $PATH.\y";
+// Ensure required commands available
+$errors = FALSE;
+$required_commands = array('git', 'tar', 'gzip');
+foreach ($required_commands as $cmd) {
+  exec("which $cmd", $output, $return);
+  if ($return != 0) {
+    print "Error: Can't find required command '$cmd'. Please install it or fix your $PATH.\n";
+    $errors = TRUE;
+  }
+}
+
+
+if ($errors) {
+  exit(1);
 }
 
 $env = array(
@@ -44,6 +54,38 @@ if (!is_dir($config_dir) || !is_writable($config_dir)) {
     exit(1);
   }
 }
+
+
+$usage = <<<EOT
+
+USAGE:
+
+php $argv[0]
+
+  --site=site-name               # REQUIRED: Name of Pantheon site.
+                                 # E.g For "dev-example.pantheon.io" this would
+                                 # be "example".
+
+  --notify                       # Display MacOS notification when script
+                                 # finishes.
+
+  -h (--help)                    # Print help and exit
+
+EOT;
+
+// process args
+$longopts = array(
+  "site:",
+  "help",
+  "notify"
+);
+$shortopts = "h";
+$options = array();
+build_options($options, $shortopts, $longopts, $usage);
+
+// Check the user's options
+validate_options();
+
 // Ensure Vagrant installed
 
 // Ensure Vbox installed

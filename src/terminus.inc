@@ -354,3 +354,61 @@ function terminus_site_backups_get($site_name, $env, $element, $to, $latest=TRUE
   }
   return FALSE;
 }
+
+function build_options(&$options, &$shortopts, &$longopts, $usage) {
+  $shortopts = $shortopts . 'h';
+  $longopts[] = 'help';
+  $options = getopt($shortopts, $longopts);
+  if ((in_array('h', array_keys($options))) || (in_array('help', array_keys($options)))) {
+    print $usage . "\n";
+    exit(0);
+  }
+}
+
+/**
+ * Validate user's options
+ */
+function validate_options() {
+  global $argv, $longopts, $shortopts;
+  $args = $argv;
+  array_shift($args);
+  $longs = array();
+  $shorts = array();
+  $bad_long = array();
+  $bad_short = array();
+  foreach ($args as $arg) {
+    if (preg_match("/^--\w{2,}/", $arg)) {
+      $arg = preg_replace('/^--/', '', $arg);
+      $parts = explode('=', $arg);
+      $longs[] = array_shift($parts);
+    }
+    // -B2  is valid, so just consider the first character
+    if (preg_match("/^-\w/", $arg)) {
+      $shorts[] = substr($arg, 1, 1);
+    }
+  }
+
+  $opts_long = array();
+  foreach ($longopts as $lopt) {
+    $opts_long[] = str_replace(':', '', $lopt);
+  }
+
+  $bad_long = array_diff($longs, $opts_long);
+  array_walk($bad_long, function (&$value, $key) {
+    $value = "--$value";
+  });
+  $opts_short = str_replace(':', '', $shortopts);
+  $bad_short = array_diff($shorts, str_split($opts_short));
+  array_walk($bad_short, function (&$value, $key) {
+    $value = "-$value";
+  });
+
+  $badness = array_merge($bad_short, $bad_long);
+  if (count($badness)) {
+    print "\nError: Unknown options were passed:\n\n";
+    print implode("\n", $badness) . "\n\n";
+    print "Use '" . $argv[0] . " -h' for help.\n";
+    exit(1);
+  }
+
+}
