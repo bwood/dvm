@@ -69,7 +69,7 @@ $site_name = strtolower(take_input("Enter the pantheon site name"));
 if (!terminus_site_info($site_name)) {
   print "Error: Either $site_name doesn't exist, or you are not a team member on that site.\n";
 //TODO: enable
-//  exit(1);
+  exit(1);
 }
 
 $site_dir = $dvm_proj_dir . '/' . $site_name;
@@ -145,14 +145,13 @@ file_put_contents("$dvm_dvm_dir/config.yml", $yaml_dumped);
 print "Restarting VM with new configuration.\n";
 //TODO: enable
 $cmd = "cd $dvm_dvm_dir;vagrant reload";
-/*
 exec($cmd, $output, $return);
 if ($return != 0) {
   print "Error: Failed to reload VM.\n";
   print implode("\n", $output);
   exit(1);
 }
-*/
+
 // Configure settings.php
 $db_conf = <<<EOT
 <?php
@@ -249,11 +248,11 @@ else {
 }
 */
 
-// Retrieve latest db for site
+// Load latest db for site
 //TODO: If no live env, try test
 //TODO: make $to configurable
 $to = '/tmp';
-print "Getting the latest live backup from Pantheon...\n";
+print "Getting the latest live database backup from Pantheon...\n";
 $path = terminus_site_backups_get($site_name, 'live', 'database', $to);
 if ($path !== FALSE) {
   // unpack db
@@ -276,5 +275,34 @@ if ($path !== FALSE) {
 }
 
 
-// Retrieve latest files for the site
+// Load latest files for the site
+$to = '/tmp';
+print "Getting the latest live files backup from Pantheon...\n";
+$path = terminus_site_backups_get($site_name, 'live', 'files', $to);
+if ($path !== FALSE) {
+  // unpack db
+  //TODO: have gzip? have tar?
+  print "Loading files backup...\n";
+  $sites_default = "$site_dir/sites/default";
+  // might not be writable after git clone from Pantheon
+  //TODO: use php function
+  exec("chmod -R a+xw $sites_default", $output, $return);
+  if ($return != 0) {
+    print "Error: Couldn't set permissions on $sites_default.\n";
+    print implode("/n", $output);
+    exit(1);
+  }
+  exec("cd $sites_default ;tar zxf $path;mv files_live files", $output, $return);
+  if ($return != 0) {
+    print "Error: Couldn't untar files.\n";
+    print implode("/n", $output);
+    exit(1);
+  }
+  // clean up
+  if (!unlink($path)) {
+    print "Warning: Couldn't clean up $path\n";
+  }
+
+}
+
 
