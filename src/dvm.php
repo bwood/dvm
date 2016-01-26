@@ -5,9 +5,43 @@ require __DIR__ . '/terminus.inc';
 use Symfony\Component\Yaml\Yaml;
 
 
+$usage = <<<EOT
+
+USAGE:
+
+php $argv[0]
+
+  --site=site-name               # REQUIRED: Name of Pantheon site.
+                                 # E.g For "dev-example.pantheon.io" this would
+                                 # be "example".
+
+  --notify                       # Display MacOS notification when script
+                                 # finishes.
+
+  --no-sound                     # Don't allow notifications to play sounds.
+
+  -h (--help)                    # Print help and exit
+
+EOT;
+
+// process args
+$longopts = array(
+  "site:",
+  "notify",
+  "no-sound"
+);
+$shortopts = "";
+$options = array();
+build_options($options, $shortopts, $longopts, $usage);
+
+// Check the user's options
+validate_options();
+
+// Requirements
 // Ensure required commands available
 $errors = FALSE;
-$required_commands = array('git', 'tar', 'gzip');
+//TODO: check for vbox
+$required_commands = array('git', 'tar', 'gzip', 'vagrant');
 foreach ($required_commands as $cmd) {
   exec("which $cmd", $output, $return);
   if ($return != 0) {
@@ -19,6 +53,15 @@ foreach ($required_commands as $cmd) {
 
 if ($errors) {
   exit(1);
+}
+
+$disable_notifications = FALSE;
+if (in_array('notify', array_keys($options))) {
+  exec("which osascript", $output, $return);
+  if ($return != 0) {
+    print "Warning: Can't find required command 'osascript'. Notafications disabled.\n";
+    $disable_notifications = TRUE;
+  }
 }
 
 $env = array(
@@ -55,42 +98,6 @@ if (!is_dir($config_dir) || !is_writable($config_dir)) {
   }
 }
 
-
-$usage = <<<EOT
-
-USAGE:
-
-php $argv[0]
-
-  --site=site-name               # REQUIRED: Name of Pantheon site.
-                                 # E.g For "dev-example.pantheon.io" this would
-                                 # be "example".
-
-  --notify                       # Display MacOS notification when script
-                                 # finishes.
-
-  -h (--help)                    # Print help and exit
-
-EOT;
-
-// process args
-$longopts = array(
-  "site:",
-  "help",
-  "notify"
-);
-$shortopts = "h";
-$options = array();
-build_options($options, $shortopts, $longopts, $usage);
-
-// Check the user's options
-validate_options();
-
-// Ensure Vagrant installed
-
-// Ensure Vbox installed
-
-
 // Load existing drupalvm config
 //TODO: if file doesn't exist in ~/.dvm, create from template
 $file = __DIR__ . "/../plugins/drupalvm_config.yml";
@@ -99,14 +106,19 @@ $yaml = Yaml::parse(file_get_contents($file));
 //TODO: Ensure the user is authed to terminus
 
 
+
+
   /////////////////////
  // Gather config ////
 /////////////////////
 
 // Site Name
-//fixme $options must be defined for take input
-$options = array();
-$site_name = strtolower(take_input("Enter the pantheon site name"));
+if (in_array('site', array_keys($options))) {
+  $site_name = $options['site'];
+} else {
+  $site_name = strtolower(take_input("Enter the pantheon site name"));
+}
+
 
 if (!terminus_site_info($site_name)) {
   print "Error: Either $site_name doesn't exist, or you are not a team member on that site.\n";
@@ -318,9 +330,8 @@ if ($path !== FALSE) {
   if (!unlink($path)) {
     print "Warning: Couldn't clean up $path\n";
   }
-  unlink($db_dump);
   */
-
+  unlink($db_dump);
 }
 
 
@@ -357,4 +368,16 @@ if ($path !== FALSE) {
 
 }
 
-
+// Display notification
+if ((!$disable_notifications) && (in_array('notify', array_keys($options)))) {
+  $cmd = "osascript -e 'display notification \"$site_name\" with title \"dvm\" subtitle \"Site(s) loaded on your VM\"'";
+  if (!in_array('no-sound', array_keys($options))) {
+    $cmd .= " sound name \"Purr\"";
+  }
+  unset($output);
+  exec($cmd, $output, $return);
+  if ($return != 0) {
+    print "Warning: Couldn't create notification.\n";
+    print implode("/n", $output);
+  }
+}
