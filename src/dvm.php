@@ -20,6 +20,7 @@ $env = array(
 $needed_vars = array();
 foreach ($env as $var) {
   if (getenv($var) === FALSE) {
+    //TODO: if var ends in _DIR strip trailing slash if exists
     $needed_vars[] = $var;
   }
   else {
@@ -53,6 +54,9 @@ if (!is_dir($config_dir) || !is_writable($config_dir)) {
 $file = __DIR__ . "/../plugins/drupalvm_config.yml";
 $yaml = Yaml::parse(file_get_contents($file));
 
+//TODO: Ensure the user is authed to terminus
+
+
   /////////////////////
  // Gather config ////
 /////////////////////
@@ -64,11 +68,12 @@ $site_name = strtolower(take_input("Enter the pantheon site name"));
 
 if (!terminus_site_info($site_name)) {
   print "Error: Either $site_name doesn't exist, or you are not a team member on that site.\n";
-  exit(1);
+//TODO: enable
+//  exit(1);
 }
 
 $site_dir = $dvm_proj_dir . '/' . $site_name;
-$site_dir_vm = '/var/www/' . $site_dir;
+$site_dir_vm = '/var/www/' . $site_name;
 if (!is_dir($site_dir)) {
   if (file_exists($site_dir)) {
     print "Error: $site_dir appears to be a plain file. Please move or remove it.\n";
@@ -129,9 +134,82 @@ if (!array_search($site_name, array_column($yaml['mysql_databases'], 'name'))) {
 
 $dumper = new Symfony\Component\Yaml\Dumper();
 $yaml_dumped = $dumper->dump($yaml, 2);
-print $yaml_dumped . "\n";
+//print $yaml_dumped . "\n";
 
 //backup
 //TODO: commit to git?
 rename("$dvm_dvm_dir/config.yml", "$dvm_dvm_dir/config.yml-" . time());
 file_put_contents("$dvm_dvm_dir/config.yml", $yaml_dumped);
+
+// Restart the VM //
+print "Restarting VM with new configuration.\n";
+//TODO: enable
+$cmd = "cd $dvm_dvm_dir;vagrant reload";
+/*
+exec($cmd, $output, $return);
+if ($return != 0) {
+  print "Error: Failed to reload VM.\n";
+  print implode("\n", $output);
+  exit(1);
+}
+*/
+// Configure settings.php
+$db_conf = <<<EOT
+<?php
+
+\$databases['default']['default'] = array (
+  'database' => '$site_name',
+  'username' => 'drupal',
+  'password' => 'drupal',
+  'prefix' => '',
+  'host' => 'localhost',
+  'port' => '',
+  'driver' => 'mysql',
+);
+EOT;
+
+$settings_local = $site_dir . "/sites/default/settings_local.php";
+if (!file_exists($settings_local)) {
+  if (!touch($settings_local)) {
+    print "Error: Couldn't create $settings_local\n";
+    exit(1);
+  }
+}
+if (file_put_contents($settings_local, $db_conf) === FALSE) {
+  print "Error: Couldn't write to $settings_local\n";
+  exit(1);
+}
+
+$settings_local_include = array(
+  '// localhost development by dvm',
+  'if (file_exists(__DIR__ . "/settings_local.php")) {',
+  '  include_once("settings_local.php");',
+  '} //dvm unique line', //without comment, this will match other lines.
+);
+
+$settings_existing = $site_dir . "/sites/default/settings.php";
+$settings_original = file($settings_existing, FILE_IGNORE_NEW_LINES);
+//TODO: improve?  assume first line is '<?php'
+array_shift($settings_original);
+$intersection = array_intersect($settings_local_include, $settings_original);
+if (count($intersection) == count($settings_local_include)) {
+  print "Conditional include exists in setting.php.\n";
+}
+elseif (count($intersection) == 0) {
+  print "Adding conditional include to settings.php\n";
+  $settings_modified = array_merge($settings_local_include, $settings_original);
+  // replace '<?php'
+  array_unshift($settings_modified, '<?php');
+  $settings_modified[] = ""; //add a newline at end of file
+  if (file_put_contents($settings_existing, implode("\n", $settings_modified)) === FALSE) {
+    print "Error: Couldn't write $settings_existing\n";
+    exit(1);
+  }
+}
+else {
+  print wordwrap("Conditional include code partially matched content of existing settings.php. Edit the file manually and ensure that the below code exists in the file.\n\n", 80);
+  print $settings_local_include . "\n\n";
+}
+
+
+
