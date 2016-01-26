@@ -15,6 +15,8 @@ php $argv[0]
                                  # E.g For "dev-example.pantheon.io" this would
                                  # be "example".
 
+  --no-files
+
   --notify                       # Display MacOS notification when script
                                  # finishes.
 
@@ -27,6 +29,7 @@ EOT;
 // process args
 $longopts = array(
   "site:",
+  "no-files",
   "notify",
   "no-sound"
 );
@@ -106,16 +109,15 @@ $yaml = Yaml::parse(file_get_contents($file));
 //TODO: Ensure the user is authed to terminus
 
 
-
-
-  /////////////////////
- // Gather config ////
+/////////////////////
+// Gather config ////
 /////////////////////
 
 // Site Name
 if (in_array('site', array_keys($options))) {
   $site_name = $options['site'];
-} else {
+}
+else {
   $site_name = strtolower(take_input("Enter the pantheon site name"));
 }
 
@@ -197,7 +199,7 @@ file_put_contents("$dvm_dvm_dir/config.yml", $yaml_dumped);
 // Restart the VM //
 print "Restarting VM with new configuration.\n";
 //TODO: enable
-$cmd = "cd $dvm_dvm_dir;vagrant reload";
+$cmd = "cd $dvm_dvm_dir;vagrant halt;vagrant up --provision";
 exec($cmd, $output, $return);
 if ($return != 0) {
   print "Error: Failed to reload VM.\n";
@@ -264,42 +266,12 @@ else {
 }
 
 
-  //////////////
- // Database //
+//////////////
+// Database //
 //////////////
 
 //TODO: get tunnel into background. fork?
-/*
-// Create ssh tunnel to VM
-$cmd_ssh = "ssh -NnTf -L 33060:localhost:3306 vagrant@" . $yaml['vagrant_hostname'] . " &";
-$cmd_ps = "ps -e |grep 'vagrant@'";
-exec($cmd_ps, $output, $return);
-if ($return != 0) {
-  print "Error: Couldn't get process info.\n";
-  exit(1);
-}
-$found = FALSE;
-foreach ($output as $out) {
-  //print "$out\n";
-  if (strpos($out, $cmd_ssh) !== FALSE) {
-    $found = TRUE;
-    break;
-  }
-}
-if (!$found) {
-// ssh tunnel doesn't exist, create one
-  print "creating tunnel\n";
-  exec($cmd_ssh, $output, $return);
 
-  if ($return != 0) {
-    print "Error: Couldn't initiate ssh tunnel to VM.\n";
-    exit(1);
-  }
-}
-else {
-  print "found tunnel\n";
-}
-*/
 
 // Load latest db for site
 //TODO: If no live env, try test
@@ -315,57 +287,95 @@ if ($path !== FALSE) {
     exit(1);
   }
   $db_dump = preg_replace("/.gz$/", "", $path);
+
+  // Create ssh tunnel to VM
+  $cmd_ssh = "ssh -f -i ~/.vagrant.d/insecure_private_key -L 33060:localhost:3306 vagrant@" . $yaml['vagrant_hostname'] . " sleep 30 >> ~/tmp/sshlog";
+  $cmd_ps = "ps -e |grep 'vagrant@'";
+  exec($cmd_ps, $output, $return);
+  if ($return != 0) {
+    print "Error: Couldn't get process info.\n";
+    exit(1);
+  }
+  $found = FALSE;
+  foreach ($output as $out) {
+    //print "$out\n";
+    if (strpos($out, $cmd_ssh) !== FALSE) {
+      $found = TRUE;
+      break;
+    }
+  }
+  if (!$found) {
+// ssh tunnel doesn't exist, create one
+    print "creating tunnel\n";
+    exec($cmd_ssh, $output, $return);
+
+    if ($return != 0) {
+      print "Error: Couldn't initiate ssh tunnel to VM.\n";
+      exit(1);
+    }
+  }
+  else {
+    print "found tunnel\n";
+  }
+
+  //hack.  ansible shuld do this.
+  $cmd = "mysql -uroot -proot -P33060 -h127.0.0.1 $site_name < 'update db set Db=\'%\' where User=\'drupal\';mysql flush privileges;'";
+  exec($cmd, $output, $return);
+  if ($return != 0) {
+    print "Warning: Couldn't set privs on db.\n";
+    //exit(1);
+  }
+
   // load db
   print "Loading database...\n";
   $cmd = "mysql -uroot -proot -P33060 -h127.0.0.1 $site_name < $db_dump";
   print "$cmd\n";
   //TODO: enable
-  /*
+
   exec($cmd, $output, $return);
   if ($return != 0) {
     print "Error: Couldn't load db.\n";
     exit(1);
   }
   // clean up
-  if (!unlink($path)) {
-    print "Warning: Couldn't clean up $path\n";
+  if (!unlink($db_dump)) {
+    print "Warning: Couldn't clean up $db_dump\n";
   }
-  */
-  unlink($db_dump);
+
 }
 
-
+if (!in_array('no-files', array_keys($options))) {
 // Load latest files for the site
-$to = '/tmp';
-print "Getting the latest live files backup from Pantheon...\n";
-$path = terminus_site_backups_get($site_name, 'live', 'files', $to);
-if ($path !== FALSE) {
-  // unpack db
-  //TODO: have gzip? have tar?
-  print "Loading files backup...\n";
-  $sites_default = "$site_dir/sites/default";
-  // might not be writable after git clone from Pantheon
-  //TODO: use php function
-  exec("chmod -R a+xw $sites_default", $output, $return);
-  if ($return != 0) {
-    print "Error: Couldn't set permissions on $sites_default.\n";
-    print implode("/n", $output);
-    exit(1);
+  $to = '/tmp';
+  print "Getting the latest live files backup from Pantheon...\n";
+  $path = terminus_site_backups_get($site_name, 'live', 'files', $to);
+  if ($path !== FALSE) {
+    // unpack db
+    //TODO: have gzip? have tar?
+    print "Loading files backup...\n";
+    $sites_default = "$site_dir/sites/default";
+    // might not be writable after git clone from Pantheon
+    //TODO: use php function
+    exec("chmod -R a+xw $sites_default", $output, $return);
+    if ($return != 0) {
+      print "Error: Couldn't set permissions on $sites_default.\n";
+      print implode("/n", $output);
+      exit(1);
+    }
+    //TODO: improve. php builtins?
+    exec("rm -rf $sites_default/files_live");
+    exec("rm -rf $sites_default/files");
+    exec("cd $sites_default ;tar zxf $path;mv files_live files", $output, $return);
+    if ($return != 0) {
+      print "Error: Couldn't untar files.\n";
+      print implode("/n", $output);
+      exit(1);
+    }
+    // clean up
+    if (!unlink($path)) {
+      print "Warning: Couldn't clean up $path\n";
+    }
   }
-  //TODO: improve. php builtins?
-  exec("rm -rf $sites_default/files_live");
-  exec("rm -rf $sites_default/files");
-  exec("cd $sites_default ;tar zxf $path;mv files_live files", $output, $return);
-  if ($return != 0) {
-    print "Error: Couldn't untar files.\n";
-    print implode("/n", $output);
-    exit(1);
-  }
-  // clean up
-  if (!unlink($path)) {
-    print "Warning: Couldn't clean up $path\n";
-  }
-
 }
 
 // Display notification
@@ -381,3 +391,7 @@ if ((!$disable_notifications) && (in_array('notify', array_keys($options)))) {
     print implode("/n", $output);
   }
 }
+
+sleep(2);
+$cmd = "open http://$site_name.localhost";
+exec($cmd);
