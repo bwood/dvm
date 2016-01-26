@@ -44,8 +44,8 @@ function terminus_output_filter($string) {
  */
 function terminus_exec($command, &$output, &$return, $io_redirection = '', $force_terminus_version = '', $verbose = FALSE) {
 
-  if (getenv("ISTDRUPAL_TERMINUS")) {
-    $command = str_replace('terminus ', getenv("ISTDRUPAL_TERMINUS") . ' ', $command);
+  if (getenv("DVM_TERMINUS")) {
+    $command = str_replace('terminus ', getenv("DVM_TERMINUS") . ' ', $command);
     if (!empty($force_terminus_version)) {
       $command = preg_replace('/(terminus)-\d+/',  '$1' . "-$force_terminus_version", $command);
       // make sure that terminus executable exists
@@ -333,4 +333,24 @@ function ensure_minimum_php_verson($minimum_version) {
   }
 
   return TRUE;
+}
+
+function terminus_site_backups_get($site_name, $env, $element, $to, $latest=TRUE) {
+  ($latest) ? $latest = '--latest' : $latest = '';
+  $terminus_backup_cmd = "terminus site backups get --site=$site_name --env=$env --element=$element --to=$to $latest";
+  terminus_exec($terminus_backup_cmd, $output, $return, '2>&1', "", TRUE);
+  if ($return !== 0) {
+    print "\nError: There was a problem with the last command\n";
+    return FALSE;
+  }
+  else {
+    foreach ($output as $out) {
+      if (strpos($out, 'target: ') !== FALSE) {
+        $parts = explode(": '", $out);
+        $path = str_replace("'", "", trim($parts[1]));
+        return $path;
+      }
+    }
+  }
+  return FALSE;
 }

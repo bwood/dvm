@@ -212,4 +212,69 @@ else {
 }
 
 
+  //////////////
+ // Database //
+//////////////
+
+//TODO: get tunnel into background. fork?
+/*
+// Create ssh tunnel to VM
+$cmd_ssh = "ssh -NnTf -L 33060:localhost:3306 vagrant@" . $yaml['vagrant_hostname'] . " &";
+$cmd_ps = "ps -e |grep 'vagrant@'";
+exec($cmd_ps, $output, $return);
+if ($return != 0) {
+  print "Error: Couldn't get process info.\n";
+  exit(1);
+}
+$found = FALSE;
+foreach ($output as $out) {
+  //print "$out\n";
+  if (strpos($out, $cmd_ssh) !== FALSE) {
+    $found = TRUE;
+    break;
+  }
+}
+if (!$found) {
+// ssh tunnel doesn't exist, create one
+  print "creating tunnel\n";
+  exec($cmd_ssh, $output, $return);
+
+  if ($return != 0) {
+    print "Error: Couldn't initiate ssh tunnel to VM.\n";
+    exit(1);
+  }
+}
+else {
+  print "found tunnel\n";
+}
+*/
+
+// Retrieve latest db for site
+//TODO: If no live env, try test
+//TODO: make $to configurable
+$to = '/tmp';
+print "Getting the latest live backup from Pantheon...\n";
+$path = terminus_site_backups_get($site_name, 'live', 'database', $to);
+if ($path !== FALSE) {
+  // unpack db
+  exec("cd $to; gzip -d $path", $output, $return);
+  if ($return != 0) {
+    print "Error: Couldn't unzip db.\n";
+    exit(1);
+  }
+  $db_dump = preg_replace("/.gz$/", "", $path);
+  // load db
+  print "Loading database...\n";
+  $cmd = "mysql -uroot -proot -P33060 -h127.0.0.1 $site_name < $db_dump";
+  print "$cmd\n";
+  exec($cmd, $output, $return);
+  if ($return != 0) {
+    print "Error: Couldn't load db.\n";
+    exit(1);
+  }
+
+}
+
+
+// Retrieve latest files for the site
 
